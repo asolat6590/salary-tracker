@@ -1,0 +1,75 @@
+/* Контейнер шапки */
+.header {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* Внутренний контейнер для центрирования */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Логотип */
+.logo {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-primary);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  transition: opacity 0.2s ease;
+}
+
+.logo:hover {
+  opacity: 0.8;
+}
+
+/* Навигация */
+.nav {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+}
+
+/* Ссылка навигации */
+.navLink {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-weight: 400;
+  padding: var(--spacing-xs) 0;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.navLink:hover {
+  color: var(--color-primary);
+}
+
+/* Активная ссылка */
+.navLinkActive {
+  color: var(--color-primary);
+  font-weight: 600;
+  border-bottom-color: var(--color-primary);
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 640px) {
+  .container {
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+  
+  .nav {
+    gap: var(--spacing-md);
+  }
+}
