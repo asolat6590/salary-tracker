@@ -29,6 +29,16 @@
       "isRecurring": false,
       "createdAt": "2026-09-30T11:08:45.159Z",
       "updatedAt": "2026-09-30T11:08:45.159Z"
+    },
+    {
+      "id": "2f3ed238-16a8-453a-acbc-cfed5039b218",
+      "amount": 10000,
+      "date": "2026-09-30",
+      "category": "transport",
+      "comment": "",
+      "isRecurring": false,
+      "createdAt": "2026-09-30T11:17:28.499Z",
+      "updatedAt": "2026-09-30T11:17:28.499Z"
     }
   ]
 }
