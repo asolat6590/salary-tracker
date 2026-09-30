@@ -1,16 +1,13 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App.jsx';
-import './styles/global.css';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+import { DataProvider } from "./context/DataContext";
+import "./styles/global.css";
 
-const root = document.getElementById('root');
-
-if (!root) {
-  console.error('Не найден элемент #root в index.html');
-} else {
-  ReactDOM.createRoot(root).render(
-    <React.StrictMode>
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <DataProvider>
       <App />
-    </React.StrictMode>
-  );
-}
+    </DataProvider>
+  </React.StrictMode>,
+);

@@ -1,100 +1,126 @@
-import { incomeService } from '../services/incomeService.js';
+import {
+  getAllIncomes,
+  getIncomeById,
+  createIncome,
+  updateIncome,
+  deleteIncome,
+} from '../services/incomeService.js';
+import { createError } from '../middleware/errorHandler.js';
 
-export const incomeController = {
-  /**
-   * GET /api/v1/incomes — Получение списка доходов
-   */
-  async getAll(req, res, next) {
-    try {
-      const { startDate, endDate, category, page, limit } = req.query;
-      const result = incomeService.getAll({ startDate, endDate, category, page, limit });
-      res.json(result);
-    } catch (error) {
-      next(error);
+/**
+ * Получение списка всех доходов с фильтрами и пагинацией
+ * GET /api/v1/incomes
+ */
+export const getIncomes = async (req, res, next) => {
+  try {
+    const { category, startDate, endDate, page = 1, limit = 20 } = req.query;
+
+    const result = await getAllIncomes({
+      category,
+      startDate,
+      endDate,
+      page: Number(page),
+      limit: Number(limit),
+    });
+
+    res.json({
+      data: result.data,
+      pagination: result.pagination,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Получение дохода по ID
+ * GET /api/v1/incomes/:id
+ */
+export const getIncome = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const income = await getIncomeById(id);
+
+    if (!income) {
+      return next(createError('Доход не найден', 404, 'NOT_FOUND'));
     }
-  },
 
-  /**
-   * GET /api/v1/incomes/:id — Получение дохода по ID
-   */
-  async getById(req, res, next) {
-    try {
-      const { id } = req.params;
-      const income = incomeService.getById(id);
+    res.json({ data: income });
+  } catch (error) {
+    next(error);
+  }
+};
 
-      if (!income) {
-        return res.status(404).json({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Доход с указанным ID не найден',
-          },
-        });
-      }
+/**
+ * Создание нового дохода
+ * POST /api/v1/incomes
+ */
+export const addIncome = async (req, res, next) => {
+  try {
+    const { amount, date, category, comment } = req.body;
 
-      res.json(income);
-    } catch (error) {
-      next(error);
+    const newIncome = await createIncome({
+      amount,
+      date,
+      category,
+      comment,
+    });
+
+    res.status(201).json({
+      data: newIncome,
+      message: 'Доход успешно создан',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Обновление существующего дохода
+ * PUT /api/v1/incomes/:id
+ */
+export const editIncome = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { amount, date, category, comment } = req.body;
+
+    const updatedIncome = await updateIncome(id, {
+      amount,
+      date,
+      category,
+      comment,
+    });
+
+    if (!updatedIncome) {
+      return next(createError('Доход не найден', 404, 'NOT_FOUND'));
     }
-  },
 
-  /**
-   * POST /api/v1/incomes — Создание нового дохода
-   */
-  async create(req, res, next) {
-    try {
-      const { amount, date, category, comment } = req.body;
-      const newIncome = incomeService.create({ amount, date, category, comment });
-      res.status(201).json(newIncome);
-    } catch (error) {
-      next(error);
+    res.json({
+      data: updatedIncome,
+      message: 'Доход успешно обновлён',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Удаление дохода
+ * DELETE /api/v1/incomes/:id
+ */
+export const removeIncome = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const success = await deleteIncome(id);
+
+    if (!success) {
+      return next(createError('Доход не найден', 404, 'NOT_FOUND'));
     }
-  },
 
-  /**
-   * PUT /api/v1/incomes/:id — Обновление дохода
-   */
-  async update(req, res, next) {
-    try {
-      const { id } = req.params;
-      const { amount, date, category, comment } = req.body;
-
-      const updatedIncome = incomeService.update(id, { amount, date, category, comment });
-
-      if (!updatedIncome) {
-        return res.status(404).json({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Доход с указанным ID не найден',
-          },
-        });
-      }
-
-      res.json(updatedIncome);
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  /**
-   * DELETE /api/v1/incomes/:id — Удаление дохода
-   */
-  async delete(req, res, next) {
-    try {
-      const { id } = req.params;
-      const success = incomeService.delete(id);
-
-      if (!success) {
-        return res.status(404).json({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Доход с указанным ID не найден',
-          },
-        });
-      }
-
-      res.status(204).send();
-    } catch (error) {
-      next(error);
-    }
-  },
+    res.json({
+      message: 'Доход успешно удалён',
+    });
+  } catch (error) {
+    next(error);
+  }
 };

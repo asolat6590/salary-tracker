@@ -1,15 +1,7 @@
-/* Корневой контейнер приложения */
+/* Стили корневого контейнера приложения */
 .app {
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-/* Основной контент */
-.main {
-  flex: 1;
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--spacing-lg);
+  min-height: 100vh;
+  background-color: var(--color-bg);
 }

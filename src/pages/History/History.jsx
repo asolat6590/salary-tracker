@@ -1,84 +1,157 @@
-import React, { useState } from 'react';
-import { useFinance } from '../../context/FinanceContext.jsx';
-import TransactionModal from '../../components/TransactionModal/TransactionModal.jsx';
-import styles from './History.module.css';
+import React, { useState, useMemo } from "react";
+import { useData } from "../../context/DataContext";
+import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from "../../utils/constants";
+import TransactionList from "../../components/TransactionList/TransactionList";
+import Modal from "../../components/Modal/Modal";
+import TransactionForm from "../../components/TransactionForm/TransactionForm";
+import styles from "./History.module.css";
 
 function History() {
-  const { transactions, deleteTransaction } = useFinance();
-  const [filterType, setFilterType] = useState('all');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const {
+    incomes,
+    expenses,
+    addTransaction,
+    updateTransaction,
+    deleteTransaction,
+  } = useData();
 
-  // Фильтрация списка операций
-  const filteredTransactions = transactions.filter((item) => {
-    if (filterType === 'all') return true;
-    return item.type === filterType;
-  });
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+
+  // Все транзакции
+  const allTransactions = useMemo(() => {
+    return [...(incomes || []), ...(expenses || [])];
+  }, [incomes, expenses]);
+
+  // Отфильтрованные транзакции
+  const filteredTransactions = useMemo(() => {
+    let result = allTransactions;
+
+    // Фильтрация по типу
+    if (typeFilter !== "all") {
+      result = result.filter((t) => t.type === typeFilter);
+    }
+
+    // Фильтрация по категории
+    if (categoryFilter !== "all") {
+      result = result.filter((t) => t.category === categoryFilter);
+    }
+
+    // Сортировка по дате (новые первые)
+    return result.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [allTransactions, typeFilter, categoryFilter]);
+
+  // Категории для фильтра (объединяем все категории)
+  const allCategories = useMemo(() => {
+    return [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
+  }, []);
+
+  // Обработчики модалки
+  const handleOpenModal = () => {
+    setEditingTransaction(null);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setEditingTransaction(null);
+    setIsModalOpen(false);
+  };
+
+  // Обработчик редактирования
+  const handleEdit = (transaction) => {
+    setEditingTransaction(transaction);
+    setIsModalOpen(true);
+  };
+
+  // Обработчик отправки формы
+  const handleSubmit = (transactionData) => {
+    if (editingTransaction) {
+      // Режим редактирования
+      updateTransaction(editingTransaction.id, {
+        ...transactionData,
+        type: editingTransaction.type,
+      });
+    } else {
+      // Режим добавления
+      addTransaction(transactionData);
+    }
+    handleCloseModal();
+  };
+
+  // Обработчик удаления
+  const handleDelete = (id) => {
+    const transaction = allTransactions.find((t) => t.id === id);
+    if (transaction) {
+      if (window.confirm("Вы уверены, что хотите удалить эту операцию?")) {
+        deleteTransaction(id, transaction.type);
+      }
+    }
+  };
 
   return (
-    <div className={styles.historyContainer}>
+    <div className={styles.history}>
       <div className={styles.header}>
         <h1 className={styles.title}>История операций</h1>
-        <div className={styles.filters}>
+        <button className={styles.addButton} onClick={handleOpenModal}>
+          <span className={styles.addIcon}>+</span>
+          Добавить операцию
+        </button>
+      </div>
+
+      <div className={styles.filters}>
+        <div className={styles.filterGroup}>
+          <label className={styles.filterLabel}>Тип операции</label>
           <select
             className={styles.filterSelect}
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
           >
-            <option value="all">Все операции</option>
+            <option value="all">Все</option>
             <option value="income">Доходы</option>
             <option value="expense">Расходы</option>
           </select>
         </div>
+
+        <div className={styles.filterGroup}>
+          <label className={styles.filterLabel}>Категория</label>
+          <select
+            className={styles.filterSelect}
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="all">Все категории</option>
+            {(allCategories || []).map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {filteredTransactions.length === 0 ? (
-        <div className={styles.emptyState}>
-          <p>Операции не найдены</p>
-        </div>
-      ) : (
-        <div className={styles.transactionList}>
-          {filteredTransactions.map((item) => (
-            <div key={item.id} className={styles.transactionCard}>
-              <div className={styles.transactionInfo}>
-                <span className={styles.category}>{item.category}</span>
-                <span className={styles.description}>
-                  {item.description || item.date}
-                </span>
-              </div>
-              <div className={styles.rightContent}>
-                <span
-                  className={
-                    item.type === 'income' ? styles.income : styles.expense
-                  }
-                >
-                  {item.type === 'income' ? '+' : '-'}
-                  {item.amount.toLocaleString('ru-RU')} ₽
-                </span>
-                <button
-                  className={styles.deleteBtn}
-                  onClick={() => deleteTransaction(item.id)}
-                  title="Удалить"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className={styles.listContainer}>
+        <TransactionList
+          transactions={filteredTransactions}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      </div>
 
-      <button
-        className={styles.fab}
-        onClick={() => setIsModalOpen(true)}
-        title="Добавить операцию"
-      >
-        +
-      </button>
-
-      <TransactionModal
+      <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+        onClose={handleCloseModal}
+        title={
+          editingTransaction ? "Редактировать операцию" : "Добавить операцию"
+        }
+      >
+        <TransactionForm
+          onSubmit={handleSubmit}
+          onCancel={handleCloseModal}
+          editData={editingTransaction}
+        />
+      </Modal>
     </div>
   );
 }

@@ -1,81 +1,120 @@
-import React, { useState } from 'react';
-import { useFinance } from '../../context/FinanceContext.jsx';
-import styles from './Analytics.module.css';
+import React, { useState, useMemo } from "react";
+import { useData } from "../../context/DataContext";
+import {
+  getByCategory,
+  getMonthlySummary,
+  getBalance,
+} from "../../services/summaryService";
+import { formatAmount } from "../../utils/formatters";
+import PieChart from "../../components/PieChart/PieChart";
+import BarChart from "../../components/BarChart/BarChart";
+import styles from "./Analytics.module.css";
 
 function Analytics() {
-  const { transactions } = useFinance();
-  const [period, setPeriod] = useState('all');
+  const { incomes, expenses } = useData();
+  const [period, setPeriod] = useState("month");
 
-  // Расчет расходов по категориям
-  const categoryTotals = transactions
-    .filter((t) => t.type === 'expense')
-    .reduce((acc, t) => {
-      acc[t.category] = (acc[t.category] || 0) + t.amount;
-      return acc;
-    }, {});
+  const periods = [
+    { id: "week", label: "Неделя" },
+    { id: "month", label: "Месяц" },
+    { id: "quarter", label: "Квартал" },
+    { id: "year", label: "Год" },
+  ];
 
-  const totalExpense = Object.values(categoryTotals).reduce(
-    (acc, val) => acc + val,
-    0
-  );
+  // Определяем количество месяцев для графика в зависимости от периода
+  const monthsCount = useMemo(() => {
+    switch (period) {
+      case "week":
+        return 1;
+      case "month":
+        return 1;
+      case "quarter":
+        return 3;
+      case "year":
+        return 12;
+      default:
+        return 6;
+    }
+  }, [period]);
 
-  const income = transactions
-    .filter((t) => t.type === 'income')
-    .reduce((acc, t) => acc + t.amount, 0);
+  // Данные для круговой диаграммы (расходы по категориям)
+  const categoryData = useMemo(() => {
+    return getByCategory("expense");
+  }, [expenses]);
+
+  // Данные для столбчатого графика (доходы и расходы по месяцам)
+  const monthlyData = useMemo(() => {
+    return getMonthlySummary(monthsCount);
+  }, [incomes, expenses, monthsCount]);
+
+  // Сводная статистика
+  const { totalIncome, totalExpense, balance } = useMemo(() => {
+    return getBalance();
+  }, [incomes, expenses]);
 
   return (
-    <div className={styles.analyticsContainer}>
+    <div className={styles.analytics}>
       <div className={styles.header}>
         <h1 className={styles.title}>Аналитика</h1>
-        <div className={styles.controls}>
-          <select
-            className={styles.periodSelect}
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-          >
-            <option value="all">За всё время</option>
-          </select>
-        </div>
       </div>
 
-      <div className={styles.grid}>
-        <div className={styles.card}>
-          <h2 className={styles.cardTitle}>Сводка доходов и расходов</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-            <div>
-              <strong>Общий доход: </strong>
-              <span style={{ color: '#10b981' }}>+{income.toLocaleString('ru-RU')} ₽</span>
-            </div>
-            <div>
-              <strong>Общий расход: </strong>
-              <span style={{ color: '#ef4444' }}>-{totalExpense.toLocaleString('ru-RU')} ₽</span>
-            </div>
-            <div>
-              <strong>Сбережения: </strong>
-              <span>{(income - totalExpense).toLocaleString('ru-RU')} ₽</span>
-            </div>
+      <div className={styles.periodSelector}>
+        {periods.map((p) => (
+          <button
+            key={p.id}
+            className={`${styles.periodButton} ${
+              period === p.id ? styles.periodButtonActive : ""
+            }`}
+            onClick={() => setPeriod(p.id)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.chartsGrid}>
+        <div className={styles.chartCard}>
+          <h2 className={styles.chartTitle}>Расходы по категориям</h2>
+          <div className={styles.chartContainer}>
+            <PieChart data={categoryData} />
           </div>
         </div>
 
-        <div className={styles.card}>
-          <h2 className={styles.cardTitle}>Структура расходов</h2>
-          {Object.keys(categoryTotals).length === 0 ? (
-            <p style={{ color: 'var(--color-text-secondary)' }}>Расходов пока нет</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-              {Object.entries(categoryTotals).map(([cat, amount]) => {
-                const percentage = totalExpense > 0 ? ((amount / totalExpense) * 100).toFixed(1) : 0;
-                return (
-                  <div key={cat} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{cat}</span>
-                    <span>
-                      {amount.toLocaleString('ru-RU')} ₽ ({percentage}%)
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        <div className={styles.chartCard}>
+          <h2 className={styles.chartTitle}>Доходы и расходы по месяцам</h2>
+          <div className={styles.chartContainer}>
+            <BarChart data={monthlyData} />
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.summarySection}>
+        <h2 className={styles.summaryTitle}>Сводка за период</h2>
+        <div className={styles.summaryGrid}>
+          <div className={styles.summaryItem}>
+            <span className={styles.summaryLabel}>Общие доходы</span>
+            <span
+              className={`${styles.summaryValue} ${styles.summaryValueIncome}`}
+            >
+              {formatAmount(totalIncome)}
+            </span>
+          </div>
+          <div className={styles.summaryItem}>
+            <span className={styles.summaryLabel}>Общие расходы</span>
+            <span
+              className={`${styles.summaryValue} ${styles.summaryValueExpense}`}
+            >
+              {formatAmount(totalExpense)}
+            </span>
+          </div>
+          <div className={styles.summaryItem}>
+            <span className={styles.summaryLabel}>Баланс</span>
+            <span
+              className={`${styles.summaryValue} ${styles.summaryValueBalance}`}
+            >
+              {formatAmount(balance)}
+            </span>
+          </div>
         </div>
       </div>
     </div>

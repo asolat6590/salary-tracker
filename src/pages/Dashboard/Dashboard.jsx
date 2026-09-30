@@ -1,89 +1,93 @@
-import React, { useState } from 'react';
-import { useFinance } from '../../context/FinanceContext.jsx';
-import TransactionModal from '../../components/TransactionModal/TransactionModal.jsx';
-import styles from './Dashboard.module.css';
+import React, { useState, useMemo } from "react";
+import { useData } from "../../context/DataContext";
+import BalanceCard from "../../components/BalanceCard/BalanceCard";
+import EmptyState from "../../components/EmptyState/EmptyState";
+import TransactionList from "../../components/TransactionList/TransactionList";
+import Modal from "../../components/Modal/Modal";
+import TransactionForm from "../../components/TransactionForm/TransactionForm";
+import styles from "./Dashboard.module.css";
 
 function Dashboard() {
-  const { transactions } = useFinance();
+  const { incomes, expenses, addTransaction, deleteTransaction } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Расчет общих сумм
-  const income = transactions
-    .filter((t) => t.type === 'income')
-    .reduce((acc, t) => acc + t.amount, 0);
+  // Вычисляем балансы
+  const { totalIncome, totalExpense, balance } = useMemo(() => {
+    const income = (incomes || []).reduce(
+      (sum, inc) => sum + (inc.amount || 0),
+      0,
+    );
+    const expense = (expenses || []).reduce(
+      (sum, exp) => sum + (exp.amount || 0),
+      0,
+    );
+    return {
+      totalIncome: income,
+      totalExpense: expense,
+      balance: income - expense,
+    };
+  }, [incomes, expenses]);
 
-  const expense = transactions
-    .filter((t) => t.type === 'expense')
-    .reduce((acc, t) => acc + t.amount, 0);
+  // Последние 5 транзакций
+  const recentTransactions = useMemo(() => {
+    const allTransactions = [...(incomes || []), ...(expenses || [])];
+    return allTransactions
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5);
+  }, [incomes, expenses]);
 
-  const balance = income - expense;
+  // Обработчики модалки
+  const handleOpenModal = () => setIsModalOpen(true);
+  const handleCloseModal = () => setIsModalOpen(false);
 
-  // Последние 5 операций
-  const recentTransactions = transactions.slice(0, 5);
+  // Обработчик добавления транзакции
+  const handleSubmit = (transactionData) => {
+    addTransaction(transactionData);
+    handleCloseModal();
+  };
+
+  // Обработчик удаления транзакции
+  const handleDelete = (id) => {
+    // Находим транзакцию, чтобы определить её тип
+    const transaction = [...(incomes || []), ...(expenses || [])].find(
+      (t) => t.id === id,
+    );
+    if (transaction) {
+      deleteTransaction(id, transaction.type);
+    }
+  };
 
   return (
-    <div className={styles.dashboardContainer}>
+    <div className={styles.dashboard}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Обзор финансов</h1>
-        <button
-          className={styles.addBtn}
-          onClick={() => setIsModalOpen(true)}
-        >
-          + Добавить операцию
+        <h1 className={styles.title}>Обзор</h1>
+        <button className={styles.addButton} onClick={handleOpenModal}>
+          <span className={styles.addIcon}>+</span>
+          Добавить операцию
         </button>
       </div>
 
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>Текущий баланс</span>
-          <span className={styles.statValue}>{balance.toLocaleString('ru-RU')} ₽</span>
-        </div>
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>Доходы</span>
-          <span className={`${styles.statValue} ${styles.income}`}>
-            +{income.toLocaleString('ru-RU')} ₽
-          </span>
-        </div>
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>Расходы</span>
-          <span className={`${styles.statValue} ${styles.expense}`}>
-            -{expense.toLocaleString('ru-RU')} ₽
-          </span>
-        </div>
+      <div className={styles.balanceGrid}>
+        <BalanceCard title="Доходы" amount={totalIncome} color="income" />
+        <BalanceCard title="Расходы" amount={totalExpense} color="expense" />
+        <BalanceCard title="Баланс" amount={balance} color="balance" />
       </div>
 
-      <div className={styles.section}>
+      <div className={styles.recentSection}>
         <h2 className={styles.sectionTitle}>Последние операции</h2>
-        {recentTransactions.length === 0 ? (
-          <p className={styles.emptyText}>Операций пока нет</p>
-        ) : (
-          <div className={styles.transactionList}>
-            {recentTransactions.map((item) => (
-              <div key={item.id} className={styles.transactionItem}>
-                <div>
-                  <div className={styles.transactionCategory}>{item.category}</div>
-                  <div className={styles.transactionDesc}>
-                    {item.description || item.date}
-                  </div>
-                </div>
-                <div
-                  className={
-                    item.type === 'income' ? styles.income : styles.expense
-                  }
-                >
-                  {item.type === 'income' ? '+' : '-'}
-                  {item.amount.toLocaleString('ru-RU')} ₽
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <TransactionList
+          transactions={recentTransactions}
+          onDelete={handleDelete}
+        />
       </div>
 
-      <TransactionModal
+      <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+        onClose={handleCloseModal}
+        title="Добавить операцию"
+      >
+        <TransactionForm onSubmit={handleSubmit} onCancel={handleCloseModal} />
+      </Modal>
     </div>
   );
 }

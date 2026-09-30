@@ -1,77 +1,125 @@
-import db from '../db/connection.js';
+import { getDb } from '../db/connection.js';
+import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '../utils/categories.js';
 
-export const summaryService = {
-  /**
-   * Получение текущего общего баланса (суммарные доходы, расходы и итоговый баланс)
-   */
-  getBalance() {
-    const totalIncomeRow = db.prepare('SELECT SUM(amount) as total FROM incomes').get();
-    const totalExpenseRow = db.prepare('SELECT SUM(amount) as total FROM expenses').get();
+/**
+ * Получение общего баланса (доходы, расходы, разница)
+ */
+export const getBalance = async (startDate, endDate) => {
+  const db = getDb();
 
-    const totalIncome = totalIncomeRow.total || 0;
-    const totalExpense = totalExpenseRow.total || 0;
-    const balance = totalIncome - totalExpense;
+  // Фильтрация доходов по датам
+  let incomes = db.data.incomes;
+  if (startDate) {
+    incomes = incomes.filter((item) => item.date >= startDate);
+  }
+  if (endDate) {
+    incomes = incomes.filter((item) => item.date <= endDate);
+  }
 
-    return {
-      totalIncome,
-      totalExpense,
-      balance,
-    };
-  },
+  // Фильтрация расходов по датам
+  let expenses = db.data.expenses;
+  if (startDate) {
+    expenses = expenses.filter((item) => item.date >= startDate);
+  }
+  if (endDate) {
+    expenses = expenses.filter((item) => item.date <= endDate);
+  }
 
-  /**
-   * Получение статистики расходов и доходов по категориям за определенный период
-   */
-  getByCategory({ startDate, endDate }) {
-    let incomeQuery = 'SELECT category, SUM(amount) as total FROM incomes WHERE 1=1';
-    let expenseQuery = 'SELECT category, SUM(amount) as total FROM expenses WHERE 1=1';
-    const params = [];
+  // Суммируем с помощью reduce
+  const totalIncome = incomes.reduce((sum, item) => sum + item.amount, 0);
+  const totalExpense = expenses.reduce((sum, item) => sum + item.amount, 0);
 
-    if (startDate) {
-      incomeQuery += ' AND date >= ?';
-      expenseQuery += ' AND date >= ?';
-      params.push(startDate);
+  return {
+    totalIncome,
+    totalExpense,
+    balance: totalIncome - totalExpense,
+  };
+};
+
+/**
+ * Получение сумм по категориям для круговой диаграммы
+ */
+export const getByCategory = async (type = 'expense', startDate, endDate) => {
+  const db = getDb();
+  const items = type === 'income' ? db.data.incomes : db.data.expenses;
+  const categories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+
+  // Фильтрация по датам
+  let filtered = items;
+  if (startDate) {
+    filtered = filtered.filter((item) => item.date >= startDate);
+  }
+  if (endDate) {
+    filtered = filtered.filter((item) => item.date <= endDate);
+  }
+
+  // Группируем суммы по категориям
+  const categorySums = {};
+  filtered.forEach((item) => {
+    if (!categorySums[item.category]) {
+      categorySums[item.category] = 0;
     }
+    categorySums[item.category] += item.amount;
+  });
 
-    if (endDate) {
-      incomeQuery += ' AND date <= ?';
-      expenseQuery += ' AND date <= ?';
-      params.push(endDate);
+  // Маппим в формат ответа, добавляя названия категорий
+  return Object.entries(categorySums)
+    .map(([categoryId, total]) => {
+      const categoryInfo = categories.find((cat) => cat.id === categoryId);
+      return {
+        categoryId,
+        categoryLabel: categoryInfo ? categoryInfo.label : categoryId,
+        total,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+};
+
+/**
+ * Получение помесячной сводки доходов и расходов
+ */
+export const getByMonth = async (monthsCount = 6) => {
+  const db = getDb();
+
+  // Вычисляем дату начала периода
+  const now = new Date();
+  const startDateObj = new Date(now.getFullYear(), now.getMonth() - monthsCount + 1, 1);
+  const startDateStr = startDateObj.toISOString().split('T')[0];
+
+  // Фильтруем доходы и расходы по начальной дате
+  const incomes = db.data.incomes.filter((item) => item.date >= startDateStr);
+  const expenses = db.data.expenses.filter((item) => item.date >= startDateStr);
+
+  // Группируем по году и месяцу
+  const monthMap = {};
+
+  incomes.forEach((item) => {
+    const date = new Date(item.date);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1; // getMonth() возвращает 0-11
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    
+    if (!monthMap[key]) {
+      monthMap[key] = { year, month, income: 0, expense: 0 };
     }
+    monthMap[key].income += item.amount;
+  });
 
-    incomeQuery += ' GROUP BY category';
-    expenseQuery += ' GROUP BY category';
+  expenses.forEach((item) => {
+    const date = new Date(item.date);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    
+    if (!monthMap[key]) {
+      monthMap[key] = { year, month, income: 0, expense: 0 };
+    }
+    monthMap[key].expense += item.amount;
+  });
 
-    const incomesByCategory = db.prepare(incomeQuery).all(...params);
-    const expensesByCategory = db.prepare(expenseQuery).all(...params);
-
-    return {
-      incomes: incomesByCategory,
-      expenses: expensesByCategory,
-    };
-  },
-
-  /**
-   * Помесячная сводка доходов и расходов
-   */
-  getByMonth() {
-    const query = `
-      SELECT month, SUM(income) as totalIncome, SUM(expense) as totalExpense FROM (
-        SELECT strftime('%Y-%m', date) as month, amount as income, 0 as expense FROM incomes
-        UNION ALL
-        SELECT strftime('%Y-%m', date) as month, 0 as income, amount as expense FROM expenses
-      )
-      GROUP BY month
-      ORDER BY month DESC
-    `;
-
-    const rows = db.prepare(query).all();
-
-    return rows.map((row) => ({
-      month: row.month,
-      totalIncome: row.totalIncome || 0,
-      totalExpense: row.totalExpense || 0,
-      netSavings: (row.totalIncome || 0) - (row.totalExpense || 0),
-    }));
-  },
+  // Сортируем по году и месяцу
+  return Object.values(monthMap).sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return a.month - b.month;
+  });
 };

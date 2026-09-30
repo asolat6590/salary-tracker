@@ -1,100 +1,129 @@
-import { expenseService } from '../services/expenseService.js';
+import {
+  getAllExpenses,
+  getExpenseById,
+  createExpense,
+  updateExpense,
+  deleteExpense,
+} from '../services/expenseService.js';
+import { createError } from '../middleware/errorHandler.js';
 
-export const expenseController = {
-  /**
-   * GET /api/v1/expenses — Получение списка расходов
-   */
-  async getAll(req, res, next) {
-    try {
-      const { startDate, endDate, category, page, limit } = req.query;
-      const result = expenseService.getAll({ startDate, endDate, category, page, limit });
-      res.json(result);
-    } catch (error) {
-      next(error);
+/**
+ * Получение списка всех расходов с фильтрами и пагинацией
+ * GET /api/v1/expenses
+ */
+export const getExpenses = async (req, res, next) => {
+  try {
+    const { category, startDate, endDate, isRecurring, page = 1, limit = 20 } = req.query;
+
+    const result = await getAllExpenses({
+      category,
+      startDate,
+      endDate,
+      isRecurring: isRecurring !== undefined ? isRecurring === 'true' : undefined,
+      page: Number(page),
+      limit: Number(limit),
+    });
+
+    res.json({
+      data: result.data,
+      pagination: result.pagination,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Получение расхода по ID
+ * GET /api/v1/expenses/:id
+ */
+export const getExpense = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const expense = await getExpenseById(id);
+
+    if (!expense) {
+      return next(createError('Расход не найден', 404, 'NOT_FOUND'));
     }
-  },
 
-  /**
-   * GET /api/v1/expenses/:id — Получение расхода по ID
-   */
-  async getById(req, res, next) {
-    try {
-      const { id } = req.params;
-      const expense = expenseService.getById(id);
+    res.json({ data: expense });
+  } catch (error) {
+    next(error);
+  }
+};
 
-      if (!expense) {
-        return res.status(404).json({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Расход с указанным ID не найден',
-          },
-        });
-      }
+/**
+ * Создание нового расхода
+ * POST /api/v1/expenses
+ */
+export const addExpense = async (req, res, next) => {
+  try {
+    const { amount, date, category, comment, isRecurring } = req.body;
 
-      res.json(expense);
-    } catch (error) {
-      next(error);
+    const newExpense = await createExpense({
+      amount,
+      date,
+      category,
+      comment,
+      isRecurring,
+    });
+
+    res.status(201).json({
+      data: newExpense,
+      message: 'Расход успешно создан',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Обновление существующего расхода
+ * PUT /api/v1/expenses/:id
+ */
+export const editExpense = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { amount, date, category, comment, isRecurring } = req.body;
+
+    const updatedExpense = await updateExpense(id, {
+      amount,
+      date,
+      category,
+      comment,
+      isRecurring,
+    });
+
+    if (!updatedExpense) {
+      return next(createError('Расход не найден', 404, 'NOT_FOUND'));
     }
-  },
 
-  /**
-   * POST /api/v1/expenses — Создание нового расхода
-   */
-  async create(req, res, next) {
-    try {
-      const { amount, date, category, comment, isRecurring } = req.body;
-      const newExpense = expenseService.create({ amount, date, category, comment, isRecurring });
-      res.status(201).json(newExpense);
-    } catch (error) {
-      next(error);
+    res.json({
+      data: updatedExpense,
+      message: 'Расход успешно обновлён',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Удаление расхода
+ * DELETE /api/v1/expenses/:id
+ */
+export const removeExpense = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const success = await deleteExpense(id);
+
+    if (!success) {
+      return next(createError('Расход не найден', 404, 'NOT_FOUND'));
     }
-  },
 
-  /**
-   * PUT /api/v1/expenses/:id — Обновление расхода
-   */
-  async update(req, res, next) {
-    try {
-      const { id } = req.params;
-      const { amount, date, category, comment, isRecurring } = req.body;
-
-      const updatedExpense = expenseService.update(id, { amount, date, category, comment, isRecurring });
-
-      if (!updatedExpense) {
-        return res.status(404).json({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Расход с указанным ID не найден',
-          },
-        });
-      }
-
-      res.json(updatedExpense);
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  /**
-   * DELETE /api/v1/expenses/:id — Удаление расхода
-   */
-  async delete(req, res, next) {
-    try {
-      const { id } = req.params;
-      const success = expenseService.delete(id);
-
-      if (!success) {
-        return res.status(404).json({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Расход с указанным ID не найден',
-          },
-        });
-      }
-
-      res.status(204).send();
-    } catch (error) {
-      next(error);
-    }
-  },
+    res.json({
+      message: 'Расход успешно удалён',
+    });
+  } catch (error) {
+    next(error);
+  }
 };
